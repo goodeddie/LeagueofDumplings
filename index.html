@@ -1,0 +1,606 @@
+<!DOCTYPE html>
+<html>
+	<head>
+		<!--
+		
+		League of Dumplings
+
+		Created by Allice and Eddie
+
+		Special thanks to Batiste Bieler and contributors for Sprite.js and more
+		
+		All rights and permissions reserved to Che Chan.
+
+		-->
+		<title>
+			League of Dumplings
+		</title>
+		<meta name="viewport" content="user-scalable=no, width=device-width">
+		
+		<script src="sprite.js"></script>
+		<script src="lib/collision.js"></script>
+		<script type="text/javascript">
+		window.onload = function() {
+		
+			sjs.debug = true;
+		
+			var scene = sjs.Scene({w:512, h:320});
+			var layer = scene.Layer("game_layer");
+			scene.loadImages([
+				'img/test/star.png',
+				'img/AllyIcon01.png',
+				],
+				function() {
+					engine = new Engine(scene, layer);
+					ticker = scene.Ticker(function() {
+						engine.run();
+					});
+					engine.setTicker(ticker);
+					ticker.run();
+				});
+			};
+			
+			function Engine(scene, layer) {
+				var that = this;
+				
+				this.scene = scene;
+				this.layer = layer;
+				this.ticker = null;
+				this.inputs = scene.Input();
+				this.setTicker = function(ticker) {
+					this.ticker = ticker;
+				}
+				this.spriteList = [];
+				
+				//////////////////////////////////////////////////////////////////
+				//Create our player                                             //
+				//////////////////////////////////////////////////////////////////
+				this.player = this.scene.Sprite("img/BunnyVer1.000.png", {
+					"layer": this.layer,
+					"x": 100,
+					"y": 100,
+					"w": 64,
+					"h": 64,
+					"angle": 0,
+					"xv": 0,
+					"yv": 0,
+					"rv": 0,
+				});
+				
+				//Common properties
+				this.player.is_NPC = false;
+				this.player.sprite_state = 1;
+				this.player.last_dir = 1; //2 - left, 3 - right, 0 - up, 1 - down
+				this.player.x_dir = 3; //2 - left, 3 - right
+				this.player.y_dir = 1; //0 - up, 1 - down
+				this.player.can_run = false;
+				this.player.can_roll = false;
+				this.player.const_xv = 2;
+				this.player.const_yv = 2;
+				this.player.max_xv = 5;
+				this.player.max_yv = 5;
+				this.player.max_rv = 0.1;
+				this.player.x_inc = 0.5;
+				this.player.y_inc = 0.5;
+				this.player.can_move_3D = true;
+				this.player.has_landed = false;
+				this.player.jump_velocity = -2;
+				
+				//Player properties
+				this.player.selected = true;
+				
+				this.player.standing_up = scene.Cycle([[0, 0, 5]]).addSprite(this.player);
+				this.player.standing_down = scene.Cycle([[0, 0, 5]]).addSprite(this.player);
+				this.player.standing_left = scene.Cycle([[0, 0, 5]]).addSprite(this.player);
+				this.player.standing_right = scene.Cycle([[0, 0, 5]]).addSprite(this.player);
+				this.player.moving_up = scene.Cycle([[0, 0, 5],[64, 64, 5]]).addSprite(this.player);
+				this.player.moving_down = scene.Cycle([[0, 0, 5],[64, 64, 5]]).addSprite(this.player);
+				this.player.moving_left = scene.Cycle([[0, 0, 5],[64, 64, 5]]).addSprite(this.player);
+				this.player.moving_right = scene.Cycle([[0, 0, 5],[64, 64, 5]]).addSprite(this.player);
+				this.player.friction_up = scene.Cycle([[0, 0, 5],[64, 64, 5]]).addSprite(this.player);
+				this.player.friction_down = scene.Cycle([[0, 0, 5],[64, 64, 5]]).addSprite(this.player);
+				this.player.friction_left = scene.Cycle([[0, 0, 5],[64, 64, 5]]).addSprite(this.player);
+				this.player.friction_right = scene.Cycle([[0, 0, 5],[64, 64, 5]]).addSprite(this.player);
+				this.player.rolling_left = scene.Cycle([[0, 0, 5],[64, 64, 5]]).addSprite(this.player);
+				this.player.rolling_right = scene.Cycle([[0, 0, 5],[64, 64, 5]]).addSprite(this.player);
+				this.player.jumping_up = scene.Cycle([[0, 0, 5],[64, 64, 5]]).addSprite(this.player);
+				this.player.falling_down = scene.Cycle([[0, 0, 5],[64, 64, 5]]).addSprite(this.player);
+				
+				this.player.moveUp = function() {
+					_moveUp(this);
+				}
+				this.player.moveDown = function() {
+					_moveDown(this);
+				}
+				this.player.moveLeft = function() {
+					_moveLeft(this);
+				}
+				this.player.moveRight = function() {
+					_moveRight(this);
+				}
+				
+				this.spriteList.push(this.player);
+				
+				//////////////////////////////////////////////////////////////////
+				//Create our test player                                        //
+				//////////////////////////////////////////////////////////////////
+				this.player2 = this.scene.Sprite("img/Bunny.png", {
+					"layer": this.layer,
+					"x": 150,
+					"y": 100,
+					"w": 64,
+					"h": 64,
+					"angle": 0,
+					"xv": 0,
+					"yv": 0,
+					"rv": 0,
+					"xf": 0.25,
+					"yf": 0.25,
+					"friction": 0.25
+				});
+				
+				//Common properties
+				this.player2.is_NPC = false;
+				this.player2.sprite_state = 1;
+				this.player2.last_dir = 1;
+				this.player2.x_dir = 3;
+				this.player2.y_dir = 1;
+				this.player2.can_run = true;
+				this.player2.can_roll = true;
+				this.player2.const_xv = 2;
+				this.player2.const_yv = 2;
+				this.player2.max_xv = 5;
+				this.player2.max_yv = 5;
+				this.player2.max_rv = 0.1;
+				this.player2.x_inc = 0.5;
+				this.player2.y_inc = 0.5;
+				this.player2.can_move_3D = false;
+				this.player2.has_landed = false;
+				this.player2.jump_velocity = -2;
+				
+				//Player properties
+				this.player2.selected = false;
+				
+				this.player2.standing_up = scene.Cycle([[0, 0, 5]]).addSprite(this.player2);
+				this.player2.standing_down = scene.Cycle([[0, 0, 5]]).addSprite(this.player2);
+				this.player2.standing_left = scene.Cycle([[0, 0, 5]]).addSprite(this.player2);
+				this.player2.standing_right = scene.Cycle([[0, 0, 5]]).addSprite(this.player2);
+				this.player2.moving_up = scene.Cycle([[0, 0, 5],[64, 64, 5]]).addSprite(this.player2);
+				this.player2.moving_down = scene.Cycle([[0, 0, 5],[64, 64, 5]]).addSprite(this.player2);
+				this.player2.moving_left = scene.Cycle([[0, 0, 5],[64, 64, 5]]).addSprite(this.player2);
+				this.player2.moving_right = scene.Cycle([[0, 0, 5],[64, 64, 5]]).addSprite(this.player2);
+				this.player2.friction_up = scene.Cycle([[0, 0, 5],[64, 64, 5]]).addSprite(this.player2);
+				this.player2.friction_down = scene.Cycle([[0, 0, 5],[64, 64, 5]]).addSprite(this.player2);
+				this.player2.friction_left = scene.Cycle([[0, 0, 5],[64, 64, 5]]).addSprite(this.player2);
+				this.player2.friction_right = scene.Cycle([[0, 0, 5],[64, 64, 5]]).addSprite(this.player2);
+				this.player2.rolling_left = scene.Cycle([[0, 0, 5],[64, 64, 5]]).addSprite(this.player2);
+				this.player2.rolling_right = scene.Cycle([[0, 0, 5],[64, 64, 5]]).addSprite(this.player2);
+				this.player2.jumping_up = scene.Cycle([[0, 0, 5],[64, 64, 5]]).addSprite(this.player2);
+				this.player2.falling_down = scene.Cycle([[0, 0, 5],[64, 64, 5]]).addSprite(this.player2);
+				
+				this.player2.moveUp = function() {
+					_jumpUp(this);
+				}
+				this.player2.moveDown = function() {
+					
+				}
+				this.player2.moveLeft = function() {
+					_moveLeft(this);
+				}
+				this.player2.moveRight = function() {
+					_moveRight(this);
+				}
+				
+				this.spriteList.push(this.player2);
+				
+				//////////////////////////////////////////////////////////////////
+				// HOW TO UPDATE MOVEMENT                                       //
+				//////////////////////////////////////////////////////////////////
+				_updateMovement = function(sprite) {
+					if(sprite.is_NPC) {
+						sprite.move();
+					}
+					else {
+						if(sprite.selected) {
+							if(that.inputs.keyboard.up) {
+								sprite.moveUp();
+							}
+							else if(that.inputs.keyboard.down) {
+								sprite.moveDown();
+							}
+							else {
+								_handleYFriction(sprite);
+							}
+							
+							if(that.inputs.keyboard.left) {
+								sprite.moveLeft();
+							}						
+							else if(that.inputs.keyboard.right) {
+								sprite.moveRight();
+							}
+							else {
+								_handleXFriction(sprite);
+							}
+						}
+						else {
+							_handleYFriction(sprite);
+							_handleXFriction(sprite);
+						}
+					}
+					
+					if(!sprite.can_move_3D) {
+						_applyGravity(sprite);
+					}
+					
+					_handleSpriteState(sprite);
+					
+					_fixBoundPositions(sprite);
+					
+					sprite.applyVelocity(1);
+					
+					if(sprite.can_move_3D) {
+						if(!(sprite.can_run)) {
+							sprite.setVelocity(0, 0);
+						}
+					}
+					else {
+						if(!(sprite.can_run)) {
+							sprite.setVelocity(0, sprite.yv);
+						}
+					}
+				}
+				
+				//////////////////////////////////////////////////////////////////
+				// HOW TO MOVE UP                                               //
+				//////////////////////////////////////////////////////////////////
+				_moveUp = function(sprite) {
+					sprite.last_dir = 0;
+					sprite.y_dir = 4;
+					sprite.sprite_state = 0;
+					if(sprite.can_run) {
+						if(sprite.yv > sprite.max_yv * -1) {
+							sprite.addVelocity(0, sprite.y_inc * -1);
+						}
+					}
+					else {
+						sprite.yv = Math.abs(sprite.const_yv) * -1;
+					}
+				}
+				
+				//////////////////////////////////////////////////////////////////
+				// HOW TO MOVE DOWN                                             //
+				//////////////////////////////////////////////////////////////////
+				_moveDown = function(sprite) {
+					sprite.last_dir = 1;
+					sprite.y_dir = 1;
+					sprite.sprite_state = 5;
+					if(sprite.can_run) {
+						if(sprite.yv < sprite.max_yv) {
+							sprite.addVelocity(0, sprite.y_inc);
+						}
+					}
+					else {
+						sprite.yv = Math.abs(sprite.const_yv);
+					}
+				}
+				
+				//////////////////////////////////////////////////////////////////
+				// HOW TO MOVE LEFT                                             //
+				//////////////////////////////////////////////////////////////////
+				_moveLeft = function(sprite) {
+					sprite.last_dir = 2;
+					sprite.x_dir = 2;
+					sprite.sprite_state = 6;
+					if(sprite.can_run) {
+						if(sprite.can_roll) {
+							if(sprite.rv > (sprite.max_rv * -1)) {
+								sprite.rv = sprite.rv - 0.01;
+							}
+							sprite.sprite_state = 14;
+							sprite.rotate(sprite.rv);
+						}
+						else {
+							sprite.setAngle(0);
+						}
+						
+						if(sprite.xv > sprite.max_xv * -1) {
+							sprite.addVelocity(sprite.x_inc * -1, 0);
+						}
+					}
+					else {
+						sprite.xv = Math.abs(sprite.const_xv) * -1;
+					}
+				}
+				
+				//////////////////////////////////////////////////////////////////
+				// HOW TO MOVE RIGHT                                            //
+				//////////////////////////////////////////////////////////////////
+				_moveRight = function(sprite) {
+					sprite.last_dir = 3;
+					sprite.x_dir = 3;
+					sprite.sprite_state = 7;
+					if(sprite.can_run) {
+						if(sprite.can_roll) {
+							if(sprite.rv < sprite.max_rv) {
+								sprite.rv = sprite.rv + 0.01;
+							}
+							sprite.sprite_state = 15;
+							sprite.rotate(sprite.rv);
+						}
+						else {
+							sprite.setAngle(0);
+						}
+						
+						if(sprite.xv < sprite.max_xv) {
+							sprite.addVelocity(sprite.x_inc, 0);
+						}
+					}
+					else {
+						sprite.xv = Math.abs(sprite.const_xv);
+					}
+				}
+				
+				//////////////////////////////////////////////////////////////////
+				// HOW TO MOVE RANDOMLY                                         //
+				//////////////////////////////////////////////////////////////////
+				_moveRandomly = function(sprite) {
+					var rand = Math.floor(Math.random()*4);
+					if(rand == 0) {
+						if(sprite.can_move_3D) {
+							_moveUp(sprite);
+						}
+					}
+					else if(rand == 1) {
+						if(sprite.can_move_3D) {
+							_moveDown(sprite);
+						}
+					}
+					else if(rand == 2) {
+						_moveLeft(sprite);
+					}
+					else {
+						_moveRight(sprite);
+					}
+				}
+				
+				//////////////////////////////////////////////////////////////////
+				// HOW TO FIX OUT OF BOUNDS                                     //
+				//////////////////////////////////////////////////////////////////
+				_fixBoundPositions = function(sprite) {
+					if((sprite.xv < 0) && (sprite.x + sprite.xv) < 0) {
+						sprite.setVelocity(0, sprite.yv);
+						sprite.setX(0);
+					}
+					else if((sprite.xv > 0) && (((sprite.x + sprite.xv) + sprite.w) > sprite.layer.w)) {
+						sprite.setVelocity(0, sprite.yv);
+						sprite.setX(sprite.layer.w - sprite.w);
+					}
+					
+					if((sprite.yv < 0) && ((sprite.y + sprite.yv) < 0)) {
+						sprite.setVelocity(sprite.xv, 0);
+						sprite.setY(0);
+					}
+					else if((sprite.yv > 0) && (((sprite.y + sprite.yv) + sprite.h) > sprite.layer.h)) {
+						if(!(sprite.can_move_3D)) {
+							sprite.has_landed = true;
+						}
+						sprite.setVelocity(sprite.xv, 0);
+						sprite.setY(sprite.layer.h - sprite.h);
+					}
+				}
+				
+				//////////////////////////////////////////////////////////////////
+				//TESTTTTTTTTTTTT                                               //
+				//////////////////////////////////////////////////////////////////
+				var s = layer.Sprite('img/test/star.png');
+				s.move(0, 0);
+				s.update();
+				//////////////////////////////////////////////////////////////////
+				//TESTTTTTTTTTTTT                                               //
+				//////////////////////////////////////////////////////////////////
+				
+				//////////////////////////////////////////////////////////////////
+				// HOW TO HANDLE SPRITE STATES                                  //
+				//                                                              //
+				// Sprite States                                                //
+				// 0 -    Standing up                                           //
+				// 1 -    Standing down                                         //
+				// 2 -    Standing left                                         //
+				// 3 -    Standing right                                        //
+				// 4 -    Moving up                                             //
+				// 5 -    Moving down                                           //
+				// 6 -    Moving left                                           //
+				// 7 -    Moving right                                          //
+				// 8 -    Friction up                                           //
+				// 9 -    Friction down                                         //
+				// 10 -   Friction left                                         //
+				// 11 -   Friction right                                        //
+				// 12 -   Jumping up                                            //
+				// 13 -   Falling down                                          //
+				// 14 -   Rolling left                                          //
+				// 15 -   Rolling right                                          //
+				//////////////////////////////////////////////////////////////////
+				_handleSpriteState = function(sprite) {
+					if(sprite.sprite_state == 0) {
+						sprite.standing_up.next();
+					}
+					else if(sprite.sprite_state == 1) {
+						sprite.standing_down.next();
+					}
+					else if(sprite.sprite_state == 2) {
+						sprite.standing_left.next();
+					}
+					else if(sprite.sprite_state == 3) {
+						sprite.standing_right.next();
+					}
+					else if(sprite.sprite_state == 4) {
+						sprite.moving_up.next();
+					}
+					else if(sprite.sprite_state == 5) {
+						sprite.moving_down.next();
+					}
+					else if(sprite.sprite_state == 6) {
+						sprite.moving_left.next();
+					}
+					else if(sprite.sprite_state == 7) {
+						sprite.moving_right.next();
+					}
+					else if(sprite.sprite_state == 8) {
+						sprite.friction_up.next();
+					}
+					else if(sprite.sprite_state == 9) {
+						sprite.friction_down.next();
+					}
+					else if(sprite.sprite_state == 10) {
+						sprite.friction_left.next();
+					}
+					else if(sprite.sprite_state == 11) {
+						sprite.friction_right.next();
+					}
+					else if(sprite.sprite_state == 12) {
+						sprite.jumping_up.next();
+					}
+					else if(sprite.sprite_state == 13) {
+						sprite.falling_down.next();
+					}
+					else if(sprite.sprite_state == 14) {
+						sprite.rotate(sprite.rv);
+						sprite.rolling_left.next();
+					}
+					else if(sprite.sprite_state == 15) {
+						sprite.rotate(sprite.rv);
+						sprite.rolling_right.next();
+					}
+					else {
+						//Sprite not found
+					}
+				}
+				
+				//////////////////////////////////////////////////////////////////
+				// CREATE GENERIC SPRITE                                        //
+				//////////////////////////////////////////////////////////////////
+				_createSprite = function() {
+					
+				}
+				
+				//////////////////////////////////////////////////////////////////
+				// CREATE NPC                                                   //
+				//////////////////////////////////////////////////////////////////
+				_createNPC = function(img, x, y) {
+					NPC = that.scene.Sprite(img, {
+						"layer": that.layer,
+						"x": x,
+						"y": y,
+						//"w": 64,
+						//"h": 64,
+						//"angle": 0,
+						"xv": 0,
+						"yv": 0,
+						"rv": 0,
+						"xf": 0.25,
+						"yf": 0.25,
+						"friction": 0.5
+					});
+					
+					//Common properties
+					NPC.is_NPC = true;
+					NPC.sprite_state = 1;
+					NPC.last_dir = 1; //0 - up, 1 - down, 2 - left, 3 - right
+					NPC.x_dir = 3; //2 - left, 3 - right
+					NPC.y_dir = 1; //0 - up, 1 - down
+					NPC.can_run = false;
+					NPC.can_roll = false;
+					NPC.const_xv = 2;
+					NPC.const_yv = 2;
+					NPC.max_xv = 5;
+					NPC.max_yv = 5;
+					NPC.max_rv = 0.1;
+					NPC.x_inc = 0.5;
+					NPC.y_inc = 0.5;
+					NPC.can_move_3D = false;
+					NPC.has_landed = false;
+					NPC.jump_velocity = -2;
+					
+					NPC.standing_up = scene.Cycle([[0, 0, 5]]).addSprite(NPC);
+					NPC.standing_down = scene.Cycle([[0, 0, 5]]).addSprite(NPC);
+					NPC.standing_left = scene.Cycle([[0, 0, 5]]).addSprite(NPC);
+					NPC.standing_right = scene.Cycle([[0, 0, 5]]).addSprite(NPC);
+					NPC.moving_up = scene.Cycle([[0, 0, 5],[64, 64, 5]]).addSprite(NPC);
+					NPC.moving_down = scene.Cycle([[0, 0, 5],[64, 64, 5]]).addSprite(NPC);
+					NPC.moving_left = scene.Cycle([[0, 0, 5],[64, 64, 5]]).addSprite(NPC);
+					NPC.moving_right = scene.Cycle([[0, 0, 5],[64, 64, 5]]).addSprite(NPC);
+					NPC.friction_up = scene.Cycle([[0, 0, 5],[64, 64, 5]]).addSprite(NPC);
+					NPC.friction_down = scene.Cycle([[0, 0, 5],[64, 64, 5]]).addSprite(NPC);
+					NPC.friction_left = scene.Cycle([[0, 0, 5],[64, 64, 5]]).addSprite(NPC);
+					NPC.friction_right = scene.Cycle([[0, 0, 5],[64, 64, 5]]).addSprite(NPC);
+					NPC.rolling_left = scene.Cycle([[0, 0, 5],[64, 64, 5]]).addSprite(NPC);
+					NPC.rolling_right = scene.Cycle([[0, 0, 5],[64, 64, 5]]).addSprite(NPC);
+					NPC.jumping_up = scene.Cycle([[0, 0, 5],[64, 64, 5]]).addSprite(NPC);
+					NPC.falling_down = scene.Cycle([[0, 0, 5],[64, 64, 5]]).addSprite(NPC);
+					
+					NPC.move = function() {
+						_moveRandomly(this);
+					}
+					
+					that.spriteList.push(this.NPC);
+				}
+				
+				_createNPC('img/BIG_BUNNY.png', 200, 100);
+				
+				//////////////////////////////////////////////////////////////////
+				// HOW TO HANDLE MOUSE CLICK                                    //
+				//////////////////////////////////////////////////////////////////
+				scene.dom.onclick = function(e) {
+					if(sjs.collision.isPointInImage(
+						e.clientX - s.x - scene.dom.offsetLeft,
+						e.clientY - s.y - scene.dom.offsetTop,
+						s.w,
+						s.h,
+						s.img)
+					) {
+						alert("star touched");
+					}
+					
+					if(sjs.collision.isPointInImage(
+						e.clientX - that.player.x - scene.dom.offsetLeft,
+						e.clientY - that.player.y - scene.dom.offsetTop,
+						that.player.w,
+						that.player.h,
+						that.player.img)
+					) {
+						that.player.selected = true;
+						that.player2.selected = false;
+					}
+					
+					if(sjs.collision.isPointInImage(
+						e.clientX - that.player2.x - scene.dom.offsetLeft,
+						e.clientY - that.player2.y - scene.dom.offsetTop,
+						that.player2.w,
+						that.player2.h,
+						that.player2.img)
+					) {
+						that.player.selected = false;
+						that.player2.selected = true;
+					}
+				};
+				
+				//////////////////////////////////////////////////////////////////
+				//Create run method which will be called each time the          //
+				//game loop runs                                                //
+				//////////////////////////////////////////////////////////////////
+				this.run = function() {
+					//Update and Paint all images
+					for (var i in that.spriteList) {
+						_updateMovement(that.spriteList[i]);
+						
+						that.spriteList[i].update();
+					}
+				}
+			}
+	</script>
+	</head>
+	<body>
+		Click on a point or press qwer
+		<span id="debug"></span>
+	</body>
+</html>
